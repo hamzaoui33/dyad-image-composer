@@ -10,12 +10,14 @@ app.use(cors());
 app.post('/compose', async (req, res) => {
   try {
     const { backgroundUrl, overlayUrl, overlayWidth, blurBackground } = req.body;
-        // Validate required parameters
+    
+    // Validate required parameters
     if (!backgroundUrl || !overlayUrl) {
       return res.status(400).json({ error: 'backgroundUrl and overlayUrl are required' });
     }
     
-    // Fetch background image    let backgroundResponse;
+    // Fetch background image
+    let backgroundResponse;
     try {
       backgroundResponse = await axios.get(backgroundUrl, { 
         responseType: 'arraybuffer',
@@ -33,7 +35,8 @@ app.post('/compose', async (req, res) => {
     try {
       overlayResponse = await axios.get(overlayUrl, { 
         responseType: 'arraybuffer',
-        timeout: 10000 // 10 second timeout for image fetch      });
+        timeout: 10000 // 10 second timeout for image fetch
+      });
     } catch (fetchError) {
       console.error('Overlay image fetch error:', fetchError.message);
       return res.status(400).json({ error: 'Failed to fetch overlay image' });
@@ -74,7 +77,8 @@ app.post('/compose', async (req, res) => {
       }
     ]);
     
-    // Output result    const png = await composite.toBuffer({ resolveWithObject: true });
+    // Output result
+    const png = await composite.toBuffer({ resolveWithObject: true });
     res.set('Content-Type', 'image/png');
     res.send(png.data);
     
