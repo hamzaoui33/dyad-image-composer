@@ -10,13 +10,35 @@ app.use(cors());
 app.post('/compose', async (req, res) => {
   try {
     const { backgroundUrl, overlayUrl, overlayWidth, blurBackground } = req.body;
+        // Validate required parameters
+    if (!backgroundUrl || !overlayUrl) {
+      return res.status(400).json({ error: 'backgroundUrl and overlayUrl are required' });
+    }
     
-    // Fetch background image
-    const backgroundResponse = await axios.get(backgroundUrl, { responseType: 'arraybuffer' });
+    // Fetch background image    let backgroundResponse;
+    try {
+      backgroundResponse = await axios.get(backgroundUrl, { 
+        responseType: 'arraybuffer',
+        timeout: 10000 // 10 second timeout for image fetch
+      });
+    } catch (fetchError) {
+      console.error('Background image fetch error:', fetchError.message);
+      return res.status(400).json({ error: 'Failed to fetch background image' });
+    }
+    
     const backgroundBuffer = backgroundResponse.data;
     
     // Fetch overlay image
-    const overlayResponse = await axios.get(overlayUrl, { responseType: 'arraybuffer' });
+    let overlayResponse;
+    try {
+      overlayResponse = await axios.get(overlayUrl, { 
+        responseType: 'arraybuffer',
+        timeout: 10000 // 10 second timeout for image fetch      });
+    } catch (fetchError) {
+      console.error('Overlay image fetch error:', fetchError.message);
+      return res.status(400).json({ error: 'Failed to fetch overlay image' });
+    }
+    
     const overlayBuffer = overlayResponse.data;
     
     // Process background image
@@ -28,7 +50,18 @@ app.post('/compose', async (req, res) => {
     // Process overlay image
     let overlay = sharp(overlayBuffer);
     if (overlayWidth) {
-      overlay = overlay.resize(overlayWidth, sharp().unknown());
+      try {
+        // Get metadata to maintain aspect ratio
+        const metadata = await overlay.metadata();
+        if (!metadata.width || !metadata.height) {
+          throw new Error('Invalid image dimensions');
+        }
+        const height = Math.round((metadata.height * overlayWidth) / metadata.width);
+        overlay = overlay.resize(overlayWidth, height);
+      } catch (resizeError) {
+        console.error('Overlay resize error:', resizeError.message);
+        return res.status(400).json({ error: 'Failed to process overlay image' });
+      }
     }
     
     // Composite images
@@ -41,14 +74,20 @@ app.post('/compose', async (req, res) => {
       }
     ]);
     
-    // Output result
-    const png = await composite.toBuffer({ resolveWithObject: true });
+    // Output result    const png = await composite.toBuffer({ resolveWithObject: true });
     res.set('Content-Type', 'image/png');
     res.send(png.data);
     
   } catch (error) {
     console.error('Composition error:', error);
-    res.status(400).json({ error: 'Invalid image processing request' });
+    // Differentiate between client and server errors
+    if (error.code === 'ECONNABORTED') {
+      return res.status(408).json({ error: 'Request timeout - image too large or slow connection' });
+    }
+    if (error.response && error.response.status >= 400 && error.response.status < 500) {
+      return res.status(400).json({ error: 'Invalid image URL or inaccessible image' });
+    }
+    res.status(500).json({ error: 'Internal server error during image processing' });
   }
 });
 
