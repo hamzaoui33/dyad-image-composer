@@ -1,7 +1,7 @@
-const express = require('express');
-const sharp = require('sharp');
-const axios = require('axios');
-const cors = require('cors');
+import express from 'express';
+import sharp from 'sharp';
+import axios from 'axios';
+import cors from 'cors';
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
@@ -244,4 +244,4 @@ function extractParams(body) {
 }
 
 // Export for Vercel serverless functions
-module.exports = app;
+export default app;
