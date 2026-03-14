@@ -23,6 +23,18 @@ app.get('/test', (req, res) => {
   res.json({ message: 'Server is working' });
 });
 
+// Handle POST to root for testing
+app.post('/', async (req, res) => {
+  console.log('POST request to root received');
+  res.status(200).json({ 
+    message: 'Server is working. Please use /compose endpoint for image composition.',
+    availableEndpoints: {
+      'GET /test': 'Test endpoint',
+      'POST /compose': 'Image composition endpoint'
+    }
+  });
+});
+
 app.post('/compose', async (req, res) => {
   try {
     console.log('=== COMPOSE ENDPOINT CALLED ===');
