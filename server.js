@@ -16,6 +16,17 @@ app.post('/compose', async (req, res) => {
       return res.status(400).json({ error: 'backgroundUrl and overlayUrl are required' });
     }
     
+    // Convert overlayWidth to number if provided
+    const width = overlayWidth ? Number(overlayWidth) : undefined;
+    if (overlayWidth && isNaN(width)) {
+      return res.status(400).json({ error: 'overlayWidth must be a valid number' });
+    }
+    
+    // Convert blurBackground to boolean if provided
+    const blur = blurBackground !== undefined ? Boolean(blurBackground) : false;
+    
+    console.log('Processing request:', { backgroundUrl, overlayUrl, width, blur });
+    
     // Fetch background image
     let backgroundResponse;
     try {
@@ -46,21 +57,21 @@ app.post('/compose', async (req, res) => {
     
     // Process background image
     let background = sharp(backgroundBuffer);
-    if (blurBackground) {
+    if (blur) {
       background = background.blur(10);
     }
     
     // Process overlay image
     let overlay = sharp(overlayBuffer);
-    if (overlayWidth) {
+    if (width) {
       try {
         // Get metadata to maintain aspect ratio
         const metadata = await overlay.metadata();
         if (!metadata.width || !metadata.height) {
           throw new Error('Invalid image dimensions');
         }
-        const height = Math.round((metadata.height * overlayWidth) / metadata.width);
-        overlay = overlay.resize(overlayWidth, height);
+        const height = Math.round((metadata.height * width) / metadata.width);
+        overlay = overlay.resize(width, height);
       } catch (resizeError) {
         console.error('Overlay resize error:', resizeError.message);
         return res.status(400).json({ error: 'Failed to process overlay image' });
@@ -84,6 +95,7 @@ app.post('/compose', async (req, res) => {
     
   } catch (error) {
     console.error('Composition error:', error);
+    console.error('Error stack:', error.stack);
     // Differentiate between client and server errors
     if (error.code === 'ECONNABORTED') {
       return res.status(408).json({ error: 'Request timeout - image too large or slow connection' });
