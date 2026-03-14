@@ -238,13 +238,13 @@ function extractParams(body) {
     };
   }
   
-  // Format 1: Direct parameters at极速版
+  // Format 1: Direct parameters at root level
   if (body.backgroundUrl || body.overlayUrl) {
     console.log('Detected direct parameters format');
     return {
       backgroundUrl: body.backgroundUrl,
       overlayUrl: body.overlayUrl,
-      overlay极速版: body.overlayWidth,
+      overlayWidth: body.overlayWidth,
       blurBackground: body.blurBackground
     };
   }
