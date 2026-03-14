@@ -4,7 +4,8 @@ const axios = require('axios');
 const cors = require('cors');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cors());
 
 // Add a simple test route
@@ -16,47 +17,79 @@ app.post('/compose', async (req, res) => {
   try {
     console.log('Raw request body:', JSON.stringify(req.body, null, 2));
     
-    // Extract parameters from the request format
-    const { backgroundUrl, overlayUrl, overlayWidth, blurBackground } = extractParams(req.body);
-        console.log('Extracted parameters:', { backgroundUrl, overlayUrl, overlayWidth, blurBackground });
+    // Extract parameters - handle multiple formats
+    let params = {};
+    
+    // Format 1: { "body": { "backgroundUrl": "...", ... } }
+    if (req.body.body && typeof req.body.body === 'object') {
+      params = req.body.body;
+    }
+    // Format 2: Direct JSON { "backgroundUrl": "...", ... }
+    else if (req.body.backgroundUrl || req.body.overlayUrl) {
+      params = req.body;
+    }
+    // Format 3: n8n form-style with parameters array
+    else if (req.body.parameters && Array.isArray(req.body.parameters)) {
+      req.body.parameters.forEach(param => {
+        params[param.name] = param.value;
+      });
+    }
+    
+    console.log('Extracted parameters:', params);
     
     // Validate required parameters
-    if (!backgroundUrl || !overlayUrl) {
-      return res.status(400).json({ error: 'backgroundUrl and overlayUrl are required' });
+    if (!params.backgroundUrl || !params.overlayUrl) {
+      return res.status(400).json({ 
+        error: 'backgroundUrl and overlayUrl are required',
+        received: params 
+      });
     }
     
     // Convert overlayWidth to number if provided
-    const width = overlayWidth ? Number(overlayWidth) : undefined;
-    if (overlayWidth && isNaN(width)) {
+    const width = params.overlayWidth ? Number(params.overlayWidth) : undefined;
+    if (params.overlayWidth && isNaN(width)) {
       return res.status(400).json({ error: 'overlayWidth must be a valid number' });
     }
     
     // Convert blurBackground to boolean if provided
-    const blur = blurBackground !== undefined ? Boolean(blurBackground) : false;
-        // Fetch background image    let backgroundResponse;
+    const blur = params.blurBackground !== undefined ? 
+      String(params.blurBackground).toLowerCase() === 'true' : false;
+    
+    console.log('Processing with:', { width, blur });
+    
+    // Fetch background image
+    let backgroundResponse;
     try {
-      backgroundResponse = await axios.get(backgroundUrl, { 
+      backgroundResponse = await axios.get(params.backgroundUrl, { 
         responseType: 'arraybuffer',
-        timeout: 10000 // 10 second timeout for image fetch
+        timeout: 30000 // 30 second timeout
       });
     } catch (fetchError) {
-      console.error('Background image fetch error:', fetchError.message);
-      return res.status(400).json({ error: 'Failed to fetch background image' });
+      console.error('Background fetch error:', fetchError.message);
+      return res.status(400).json({ 
+        error: 'Failed to fetch background image',
+        details: fetchError.message 
+      });
     }
     
     const backgroundBuffer = backgroundResponse.data;
     
-    // Fetch overlay image    let overlayResponse;
+    // Fetch overlay image
+    let overlayResponse;
     try {
-      overlayResponse = await axios.get(overlayUrl, { 
+      overlayResponse = await axios.get(params.overlayUrl, { 
         responseType: 'arraybuffer',
-        timeout: 10000 // 10 second timeout for image fetch
+        timeout: 30000 // 30 second timeout
       });
     } catch (fetchError) {
-      console.error('Overlay image fetch error:', fetchError.message);
-      return res.status(400).json({ error: 'Failed to fetch overlay image' });
+      console.error('Overlay fetch error:', fetchError.message);
+      return res.status(400).json({ 
+        error: 'Failed to fetch overlay image',
+        details: fetchError.message 
+      });
     }
-        const overlayBuffer = overlayResponse.data;
+    
+    const overlayBuffer = overlayResponse.data;
     
     // Process background image
     let background = sharp(backgroundBuffer);
@@ -68,7 +101,6 @@ app.post('/compose', async (req, res) => {
     let overlay = sharp(overlayBuffer);
     if (width) {
       try {
-        // Get metadata to maintain aspect ratio
         const metadata = await overlay.metadata();
         if (!metadata.width || !metadata.height) {
           throw new Error('Invalid image dimensions');
@@ -91,34 +123,27 @@ app.post('/compose', async (req, res) => {
       }
     ]);
     
-    // Output result    const png = await composite.toBuffer({ resolveWithObject: true });
+    // Output result
+    const png = await composite.toBuffer({ resolveWithObject: true });
     res.set('Content-Type', 'image/png');
     res.send(png.data);
     
   } catch (error) {
     console.error('Composition error:', error);
     console.error('Error stack:', error.stack);
-    res.status(500).json({ error: 'Internal server error' });
+    
+    // Send detailed error in development
+    if (process.env.NODE_ENV !== 'production') {
+      res.status(500).json({ 
+        error: 'Internal server error',
+        message: error.message,
+        stack: error.stack 
+      });
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
   }
 });
-
-// Helper function to extract parameters from n8n-style request
-function extractParams(body) {
-  const params = {};
-  
-  if (body.parameters) {
-    body.parameters.forEach(param => {
-      params[param.name] = param.value;
-    });
-  }
-  
-  return {
-    backgroundUrl: body.backgroundUrl || params.backgroundUrl,
-    overlayUrl: body.overlayUrl || params.overlayUrl,
-    overlayWidth: body.overlayWidth || params.overlayWidth,
-    blurBackground: body.blurBackground || params.blurBackground
-  };
-}
 
 // Export for Vercel serverless functions
 module.exports = app;
