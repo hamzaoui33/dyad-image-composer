@@ -8,6 +8,15 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cors());
 
+// Add middleware to capture raw body for debugging
+app.use((req, res, next) => {
+  console.log('=== REQUEST RECEIVED ===');
+  console.log('Method:', req.method);
+  console.log('URL:', req.url);
+  console.log('Headers:', req.headers);
+  next();
+});
+
 // Add a simple test route
 app.get('/test', (req, res) => {
   res.json({ message: 'Server is working' });
