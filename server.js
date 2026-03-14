@@ -23,8 +23,7 @@ app.get('/test', (req, res) => {
   res.json({ message: 'Server is working' });
 });
 
-// Handle POST to root for testing
-app.post('/', async (req, res) => {
+// Handle POST to root for testingapp.post('/', async (req, res) => {
   console.log('POST request to root received');
   res.status(200).json({ 
     message: 'Server is working. Please use /compose endpoint for image composition.',
@@ -55,7 +54,7 @@ app.post('/compose', async (req, res) => {
     
     // Convert overlayWidth to number if provided
     let width;
-    if (params.overlayWidth) {
+    if (params.overlayWidth !== undefined && params.overlayWidth !== null && params.overlayWidth !== '') {
       width = Number(params.overlayWidth);
       if (isNaN(width)) {
         return res.status(400).json({ error: 'overlayWidth must be a valid number' });
@@ -64,7 +63,7 @@ app.post('/compose', async (req, res) => {
     }
     
     // Convert blurBackground to boolean if provided
-    const blur = params.blurBackground !== undefined ? 
+    const blur = params.blurBackground !== undefined && params.blurBackground !== null ? 
       String(params.blurBackground).toLowerCase() === 'true' : false;
     console.log('Blur background:', blur);
     
@@ -123,16 +122,14 @@ app.post('/compose', async (req, res) => {
     
     const overlayBuffer = overlayResponse.data;
     
-    // Process background image
-    console.log('Processing background image with sharp...');
+    // Process background image    console.log('Processing background image with sharp...');
     let background;
     try {
       background = sharp(backgroundBuffer);
       if (blur) {
         background = background.blur(10);
       }
-      // Get background metadata
-      const bgMetadata = await background.metadata();
+      // Get background metadata      const bgMetadata = await background.metadata();
       console.log('Background metadata:', bgMetadata);
     } catch (sharpError) {
       console.error('Sharp background error:', sharpError.message);
@@ -226,8 +223,7 @@ function extractParams(body) {
     return {};
   }
   
-  // Handle n8n specific format where body is nested
-  if (body.body && typeof body.body === 'object' && 
+  // Handle n8n specific format where body is nested  if (body.body && typeof body.body === 'object' && 
       (body.body.backgroundUrl || body.body.overlayUrl)) {
     console.log('Detected n8n nested body format');
     return {
@@ -248,8 +244,7 @@ function extractParams(body) {
       blurBackground: body.blurBackground
     };
   }
-  
-  // Format 2: Parameters as individual properties (n8n form data)
+    // Format 2: Parameters as individual properties (n8n form data)
   if (typeof body === 'object') {
     console.log('Detected object format');
     return {
@@ -259,8 +254,7 @@ function extractParams(body) {
       blurBackground: body.blurBackground
     };
   }
-  
-  console.log('No known format detected');
+    console.log('No known format detected');
   return {};
 }
 
