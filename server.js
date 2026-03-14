@@ -136,7 +136,7 @@ app.post('/compose', async (req, res) => {
       console.log('Background metadata:', bgMetadata);
     } catch (sharpError) {
       console.error('Sharp background error:', sharpError.message);
-      return res.status(400).json({ error: 'Failed to process background image' });
+      return res.status(400).json({ error: 'Failed to process background image', details: sharpError.message });
     }
     
     // Process overlay image
@@ -156,36 +156,48 @@ app.post('/compose', async (req, res) => {
       }
     } catch (sharpError) {
       console.error('Sharp overlay error:', sharpError.message);
-      return res.status(400).json({ error: 'Failed to process overlay image' });
+      return res.status(400).json({ error: 'Failed to process overlay image', details: sharpError.message });
     }
     
     // Composite images
     console.log('Compositing images...');
     let composite;
     try {
+      const overlayBufferProcessed = await overlay.toBuffer();
+      console.log('Overlay processed successfully, size:', overlayBufferProcessed.length);
+      
       composite = background.composite([
         {
-          input: await overlay.toBuffer(),
+          input: overlayBufferProcessed,
           blend: 'over',
-          top: 'center',
-          left: 'center',
+          gravity: 'center'
         }
       ]);
     } catch (compositeError) {
       console.error('Composite error:', compositeError.message);
-      return res.status(400).json({ error: 'Failed to composite images' });
+      console.error('Composite error stack:', compositeError.stack);
+      return res.status(400).json({ 
+        error: 'Failed to composite images',
+        details: compositeError.message,
+        stack: compositeError.stack
+      });
     }
     
     // Output result
     console.log('Generating output buffer...');
     try {
-      const png = await composite.toBuffer({ resolveWithObject: true });
+      const png = await composite.png().toBuffer({ resolveWithObject: true });
       console.log('Image generated successfully, size:', png.data.length);
       res.set('Content-Type', 'image/png');
       res.send(png.data);
     } catch (outputError) {
       console.error('Output error:', outputError.message);
-      return res.status(500).json({ error: 'Failed to generate output image' });
+      console.error('Output error stack:', outputError.stack);
+      return res.status(500).json({ 
+        error: 'Failed to generate output image',
+        details: outputError.message,
+        stack: outputError.stack
+      });
     }
     
   } catch (error) {
@@ -226,13 +238,13 @@ function extractParams(body) {
     };
   }
   
-  // Format 1: Direct parameters at root level
+  // Format 1: Direct parameters at极速版
   if (body.backgroundUrl || body.overlayUrl) {
     console.log('Detected direct parameters format');
     return {
       backgroundUrl: body.backgroundUrl,
       overlayUrl: body.overlayUrl,
-      overlayWidth: body.overlayWidth,
+      overlay极速版: body.overlayWidth,
       blurBackground: body.blurBackground
     };
   }
