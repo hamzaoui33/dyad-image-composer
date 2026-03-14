@@ -14,6 +14,7 @@ app.use((req, res, next) => {
   console.log('Method:', req.method);
   console.log('URL:', req.url);
   console.log('Headers:', req.headers);
+  console.log('Content-Type:', req.headers['content-type']);
   next();
 });
 
@@ -25,7 +26,7 @@ app.get('/test', (req, res) => {
 app.post('/compose', async (req, res) => {
   try {
     console.log('=== COMPOSE ENDPOINT CALLED ===');
-    console.log('Raw request body:', JSON.stringify(req.body, null, 2));
+    console.log('Raw request body:', req.body);
     console.log('Request body type:', typeof req.body);
     console.log('Request body keys:', Object.keys(req.body || {}));
     
@@ -182,16 +183,12 @@ app.post('/compose', async (req, res) => {
     console.error('Error name:', error.name);
     
     // Send detailed error in development
-    if (process.env.NODE_ENV !== 'production') {
-      res.status(500).json({ 
-        error: 'Internal server error',
-        message: error.message,
-        name: error.name,
-        stack: error.stack 
-      });
-    } else {
-      res.status(500).json({ error: 'Internal server error' });
-    }
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message,
+      name: error.name,
+      stack: error.stack 
+    });
   }
 });
 
@@ -205,20 +202,10 @@ function extractParams(body) {
     return {};
   }
   
-  // Format 1: Direct parameters at root level
-  if (body.backgroundUrl || body.overlayUrl) {
-    console.log('Detected format 1: direct parameters');
-    return {
-      backgroundUrl: body.backgroundUrl,
-      overlayUrl: body.overlayUrl,
-      overlayWidth: body.overlayWidth,
-      blurBackground: body.blurBackground
-    };
-  }
-  
-  // Format 2: Parameters nested in body property (n8n style)
-  if (body.body && typeof body.body === 'object') {
-    console.log('Detected format 2: nested body property');
+  // Handle n8n specific format where body is nested
+  if (body.body && typeof body.body === 'object' && 
+      (body.body.backgroundUrl || body.body.overlayUrl)) {
+    console.log('Detected n8n nested body format');
     return {
       backgroundUrl: body.body.backgroundUrl,
       overlayUrl: body.body.overlayUrl,
@@ -227,16 +214,26 @@ function extractParams(body) {
     };
   }
   
-  // Format 3: n8n parameters array
-  if (body.parameters && Array.isArray(body.parameters)) {
-    console.log('Detected format 3: parameters array');
-    const params = {};
-    body.parameters.forEach(param => {
-      if (param.name && param.value !== undefined) {
-        params[param.name] = param.value;
-      }
-    });
-    return params;
+  // Format 1: Direct parameters at root level
+  if (body.backgroundUrl || body.overlayUrl) {
+    console.log('Detected direct parameters format');
+    return {
+      backgroundUrl: body.backgroundUrl,
+      overlayUrl: body.overlayUrl,
+      overlayWidth: body.overlayWidth,
+      blurBackground: body.blurBackground
+    };
+  }
+  
+  // Format 2: Parameters as individual properties (n8n form data)
+  if (typeof body === 'object') {
+    console.log('Detected object format');
+    return {
+      backgroundUrl: body.backgroundUrl,
+      overlayUrl: body.overlayUrl,
+      overlayWidth: body.overlayWidth,
+      blurBackground: body.blurBackground
+    };
   }
   
   console.log('No known format detected');
