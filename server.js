@@ -7,9 +7,18 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Add a simple test route
+app.get('/test', (req, res) => {
+  res.json({ message: 'Server is working' });
+});
+
 app.post('/compose', async (req, res) => {
   try {
-    const { backgroundUrl, overlayUrl, overlayWidth, blurBackground } = req.body;
+    console.log('Raw request body:', JSON.stringify(req.body, null, 2));
+    
+    // Extract parameters from the request format
+    const { backgroundUrl, overlayUrl, overlayWidth, blurBackground } = extractParams(req.body);
+        console.log('Extracted parameters:', { backgroundUrl, overlayUrl, overlayWidth, blurBackground });
     
     // Validate required parameters
     if (!backgroundUrl || !overlayUrl) {
@@ -24,10 +33,7 @@ app.post('/compose', async (req, res) => {
     
     // Convert blurBackground to boolean if provided
     const blur = blurBackground !== undefined ? Boolean(blurBackground) : false;
-    
-    console.log('Processing request:', { backgroundUrl, overlayUrl, width, blur });
-    
-    // Fetch background image
+        // Fetch background image
     let backgroundResponse;
     try {
       backgroundResponse = await axios.get(backgroundUrl, { 
@@ -41,8 +47,7 @@ app.post('/compose', async (req, res) => {
     
     const backgroundBuffer = backgroundResponse.data;
     
-    // Fetch overlay image
-    let overlayResponse;
+    // Fetch overlay image    let overlayResponse;
     try {
       overlayResponse = await axios.get(overlayUrl, { 
         responseType: 'arraybuffer',
@@ -96,16 +101,27 @@ app.post('/compose', async (req, res) => {
   } catch (error) {
     console.error('Composition error:', error);
     console.error('Error stack:', error.stack);
-    // Differentiate between client and server errors
-    if (error.code === 'ECONNABORTED') {
-      return res.status(408).json({ error: 'Request timeout - image too large or slow connection' });
-    }
-    if (error.response && error.response.status >= 400 && error.response.status < 500) {
-      return res.status(400).json({ error: 'Invalid image URL or inaccessible image' });
-    }
-    res.status(500).json({ error: 'Internal server error during image processing' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Helper function to extract parameters from n8n-style request
+function extractParams(body) {
+  const params = {};
+  
+  if (body.parameters) {
+    body.parameters.forEach(param => {
+      params[param.name] = param.value;
+    });
+  }
+  
+  return {
+    backgroundUrl: body.backgroundUrl || params.backgroundUrl,
+    overlayUrl: body.overlayUrl || params.overlayUrl,
+    overlayWidth: body.overlayWidth || params.overlayWidth,
+    blurBackground: body.blurBackground || params.blurBackground
+  };
+}
 
 // Export for Vercel serverless functions
 module.exports = app;
